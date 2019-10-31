@@ -62,6 +62,31 @@ size_t Network::random_connect(const double &mean_deg, const double &mean_streng
     return num_links;
 }
 
+std::pair<size_t, double> Network:: degree(const size_t& n) const{ 
+	
+	std::pair<size_t, double> deg;	
+	linkmap::const_iterator itmin=links.lower_bound({n,0});
+	linkmap::const_iterator itmax=links.lower_bound({n+1, 0});
+	for( ;itmin->first != itmax->first; ++itmin){
+			deg.first+=1;
+			deg.second+= itmin->second;
+	}
+	return deg; 
+}
+
+
+std::vector<std::pair<size_t, double> > Network:: neighbors(const size_t& n) const{
+	
+	std::vector<std::pair<size_t, double>> voisins;
+	linkmap::const_iterator itmin=links.lower_bound({n,0});
+	linkmap::const_iterator itmax=links.lower_bound({n+1,0});
+	for(; itmin->first != itmax->first; ++itmin){	
+		voisins.push_back(std::pair<size_t, double> ((itmin->first).second, itmin->second));
+	}
+	return voisins;
+}
+	
+
 std::vector<double> Network::potentials() const {
     std::vector<double> vals;
     for (size_t nn=0; nn<size(); nn++)
@@ -75,6 +100,74 @@ std::vector<double> Network::recoveries() const {
         vals.push_back(neurons[nn].recovery());
     return vals;
 }
+
+
+std::set<size_t> Network::step(const std::vector<double>& input){
+	
+	std::set<size_t> indices;
+	for(size_t i(0); i<neurons.size(); ++i){
+		if(neurons[i].firing()){ 
+			indices.insert(i);
+			neurons[i].reset();
+			}
+		}
+		
+	if(input.size() == neurons.size()){
+			
+		std::vector<double> inthalamique;
+		for(size_t j(0); j<neurons.size(); ++j){
+			double intha(input[j]);	
+			if(neurons[j].is_inhibitory()){
+				intha *= 0.4;
+			} 
+			inthalamique.push_back(intha);
+		}
+			
+		std::vector<double> courant;
+		for(size_t n(0); n<neurons.size(); ++n){
+			std::vector<std::pair<size_t, double> > voisins(neighbors(n));
+			double ext_sum;
+			double in_sum;
+			for(size_t m(0); m<voisins.size(); ++m){
+				if(neurons[voisins[m].first].firing()){
+						if(neurons[voisins[m].first].is_inhibitory()){
+							in_sum += voisins[m].second;
+						} else {
+							ext_sum += voisins[m].second;
+						}
+				}
+			}
+			courant.push_back(inthalamique[n] + 0.5*ext_sum - in_sum);
+		}
+		
+		for(size_t i(0); i<neurons.size(); ++i){
+			neurons[i].input(courant[i]);
+			neurons[i].step();
+		}
+	}
+	return indices;
+}
+/*for(size_t j(0); j<neurons.size(); ++j){//j c'est les neurones autour		
+				for(auto element :neighbors(i)){
+					if(element.first == j and neurons[j].firing()){
+						
+						if (not neurons[j].is_inhibitory()){
+							excitateurs.push_back(std::pair<size_t, double> (element.first, element.second));
+							intha = input[i];	
+						}
+					}
+				}
+			}
+		double ext_sum;
+		for (auto element : excitateurs) {
+			ext_sum += element.second;
+		}
+		double in_sum;
+		for(auto element : inhibiteurs){
+			in_sum += element.second;
+		}
+		
+	}*/
 
 void Network::print_params(std::ostream *_out) {
     (*_out) << "Type\ta\tb\tc\td\tInhibitory\tdegree\tvalence" << std::endl;
